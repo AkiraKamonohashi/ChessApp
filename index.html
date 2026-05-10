@@ -6,65 +6,92 @@
     <title>Chess Pro AI</title>
     
     <link rel="manifest" href="manifest.json">
-    
     <link rel="stylesheet" href="chessboard.css">
     <style>
         body { background: #262421; color: #fff; font-family: -apple-system, sans-serif; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
         .game-container { width: 98%; max-width: 400px; padding: 5px; }
         
-        /* GPU Optimized Board */
-        #board { 
-            width: 100%; 
-            border-radius: 3px; 
-            box-shadow: 0 10px 40px rgba(0,0,0,0.6); 
-            overflow: hidden;
-            transform: translate3d(0,0,0); /* Hardware Acceleration */
+        /* Update Banner */
+        #update-banner { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; 
+            background: #81b64c; color: white; text-align: center; 
+            padding: 15px; z-index: 9999; border-bottom: 2px solid #fff; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5); font-weight: bold;
+        }
+        #update-btn { 
+            margin-left: 10px; padding: 5px 15px; background: #fff; 
+            color: #81b64c; border: none; border-radius: 4px; 
+            font-weight: bold; cursor: pointer; 
         }
 
-        /* EXACT CHESS.COM COLORS */
+        #board { 
+            width: 100%; border-radius: 3px; 
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6); 
+            overflow: hidden; transform: translate3d(0,0,0); 
+        }
+
         .white-1e1d7 { background-color: #ebecd0 !important; }
         .black-3c85d { background-color: #779556 !important; }
 
-        /* Optimized Visuals - Small Dots like Chess.com */
         .dot { 
-            height: 12px; width: 12px; 
-            background-color: rgba(0,0,0,0.15); 
-            border-radius: 50%; 
-            display: block; margin: auto; 
+            height: 12px; width: 12px; background-color: rgba(0,0,0,0.15); 
+            border-radius: 50%; display: block; margin: auto; 
             position: absolute; top: 50%; left: 50%; 
-            transform: translate(-50%, -50%); 
-            pointer-events: none; z-index: 100;
+            transform: translate(-50%, -50%); pointer-events: none; z-index: 100;
         }
         .square-55d63 { position: relative; cursor: pointer; -webkit-tap-highlight-color: transparent; } 
         .highlight-selected { background-color: rgba(255, 255, 0, 0.5) !important; }
-        
-        /* VIBRANT PREMOVE */
         .premove-sq { background-color: rgba(244, 43, 31, 0.8) !important; } 
 
         .ui-panel { background: #312e2b; width: 92%; max-width: 380px; margin-top: 20px; padding: 12px 18px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; }
         #status { font-weight: 600; color: #81b64c; font-size: 15px; }
+        .version-tag { font-size: 10px; color: #666; margin-top: 10px; }
         button { padding: 10px 20px; border: none; border-radius: 4px; background: #81b64c; color: #fff; font-weight: bold; cursor: pointer; }
     </style>
 
     <script>
+      let newWorker;
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('./sw.js').then(reg => {
-            // Check for updates every time the app is opened
-            reg.update();
-          }).catch(err => {
-            console.log('Service Worker registration failed: ', err);
+            reg.addEventListener('updatefound', () => {
+              newWorker = reg.installing;
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // Show the update button when a new version is ready
+                  document.getElementById('update-banner').style.display = 'block';
+                }
+              });
+            });
           });
         });
+
+        let refreshing;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (refreshing) return;
+          window.location.reload();
+          refreshing = true;
+        });
+      }
+
+      function installUpdate() {
+        if (newWorker) {
+          newWorker.postMessage({ action: 'skipWaiting' });
+        }
       }
     </script>
 </head>
 <body>
+    <div id="update-banner">
+        New Version Available! <button id="update-btn" onclick="installUpdate()">UPDATE</button>
+    </div>
+
     <div id="board" class="game-container"></div>
     <div class="ui-panel">
         <div id="status">Your Turn</div>
         <button onclick="location.reload()">New Game</button>
     </div>
+    <div class="version-tag">v1.0.0</div>
 
     <script src="jquery.js"></script>
     <script src="chess.js"></script>
@@ -76,7 +103,6 @@
         var $status = $('#status');
         var moveSound = new Audio('move.mp3'); 
         var engine = new Worker('stockfish.js');
-        
         var sourceSquare = null;
         var premove = null;
 
@@ -105,7 +131,7 @@
             var move = game.move({ from: source, to: target, promotion: 'q' });
             if (move === null) return false;
 
-            moveSound.play();
+            try { moveSound.play(); } catch(e) {}
             board.position(game.fen(), true);
             removeVisuals();
             updateStatus();
@@ -127,7 +153,7 @@
                     var moveStr = e.data.split(' ')[1];
                     game.move({ from: moveStr.substring(0,2), to: moveStr.substring(2,4), promotion: 'q' });
                     board.position(game.fen(), true);
-                    moveSound.play();
+                    try { moveSound.play(); } catch(e) {}
                     updateStatus();
                     
                     if (premove) {
@@ -203,7 +229,7 @@
                 sourceSquare = null;
             },
             onSnapEnd: () => board.position(game.fen()),
-            pieceTheme: 'img/{piece}.png' // Assuming images are in an 'img' folder
+            pieceTheme: 'img/{piece}.png'
         };
 
         board = Chessboard('board', config);
