@@ -13,7 +13,7 @@ const assets = [
   './jquery.js',
   './stockfish.js',
   './manifest.json',
-  /* Add paths to your piece images if you want them to work offline */
+  /* Add paths to your piece images for offline play */
   './img/wP.png',
   './img/wN.png',
   './img/wB.png',
@@ -34,7 +34,7 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME).then((cache) => {
       console.log('Caching assets for ' + CACHE_NAME);
       return cache.addAll(assets);
-    }).then(() => self.skipWaiting()) // Forces the new service worker to become active immediately
+    })
   );
 });
 
@@ -45,7 +45,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
       );
-    }).then(() => self.clients.claim()) // Takes control of the page immediately
+    }).then(() => self.clients.claim()) 
   );
 });
 
@@ -56,4 +56,11 @@ self.addEventListener('fetch', (event) => {
       return cachedResponse || fetch(event.request);
     })
   );
+});
+
+// 4. Message Event: Listens for the "UPDATE NOW" button click from index.html
+self.addEventListener('message', (event) => {
+  if (event.data.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
 });
